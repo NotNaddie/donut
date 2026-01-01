@@ -8,15 +8,15 @@ const H: f64 = 46.0;
 const R1: f64 = 1.0;
 const R2: f64 = 2.0;
 
-const K1: f64 = 10.0;
-const K2: f64 = K1*H/12.0*(R1 + R2);
+const KZ: f64 = 5.0; // Distancia desde la cámara
+const K1: f64 = KZ*(3.0_f64*H/4.0_f64)/(R1 + R2); // CAMBIO EN EL NOMBRE DE LA CONSTANTE, K2 NO EXISTE
 
 const TS: f64 = 0.02;
 const PS: f64 = 0.03;
 
 fn get_buffer<'s>(alpha: f64, beta: f64) -> [[&'s str; W as usize]; H as usize] {
     let mut buffer: [[&str; W as usize]; H as usize] = [[" "; W as usize]; H as usize];
-    let mut y_buffer: [[f64; W as usize]; H as usize] = [[0.0; W as usize]; H as usize];
+    let mut z_buffer: [[f64; W as usize]; H as usize] = [[0.0; W as usize]; H as usize];
 
     let (sina, sinb): (f64, f64) = (alpha.sin(), beta.sin());
     let (cosa, cosb): (f64, f64) = (alpha.cos(), beta.cos());
@@ -33,22 +33,22 @@ fn get_buffer<'s>(alpha: f64, beta: f64) -> [[&'s str; W as usize]; H as usize] 
 
             let (cx, cy): (f64, f64) = (R2 + R1*cosp, R1*sinp);
             let (x, y, z): (f64, f64, f64) = (
-                cosa*cost*cx - sina*cy,
-                cosb*(sina*cost*cx + cosa*cy) + sinb*sint*cx,
-                cosb*sint*cx - sinb*(sina*cost*cx + cosa*cy)
+                cosb*cost*cx - sinb*(cosa*cy + sina*sint*cx),
+                sinb*cost*cx + cosb*(cosa*cy + sina*sint*cx),
+                sina*cy - cosa*sint*cx + KZ
             );
+
+            let ooz = 1.0_f64/z;
 
             let (px, py): (i32, i32) = (
-                (W/2.0 + (K2*x/(K1+y))) as i32,
-                (H + (K2*z/(K1+y))) as i32 / 2 // División tras conversión por generalización
+                (W/2.0 + ooz*K1*x) as i32,
+                (H - ooz*K1*y) as i32 / 2 // División tras conversión por generalización
             );
 
-            let ooy = 1.0_f64/(y + K2);
+            let l: f64 = cost*cosp*sinb - cosa*cosp*sint - sina*sinp + cosb*(cosa*sinp - cosp*sina*sint);
 
-            let l: f64 = cosa*cost*cosp-sina*sint + (cosb*(sina*cost*cosp + cosa*sint) - sinb*cost*sinp);
-
-            if ooy > y_buffer[py as usize][px as usize] {
-                y_buffer[py as usize][px as usize] = ooy;
+            if ooz > z_buffer[py as usize][px as usize] {
+                z_buffer[py as usize][px as usize] = ooz;
                 buffer[py as usize][px as usize] = CHARS[(l*8_f64)as usize];
             }
             
@@ -62,6 +62,11 @@ fn get_buffer<'s>(alpha: f64, beta: f64) -> [[&'s str; W as usize]; H as usize] 
 }
 
 fn print_buffer<'s>(output_buffer: [[&'s str; W as usize]; H as usize]) {
+    use std::io::{self, Write};
+
+    print!("\x1B[1;1H");
+    print!("\x1B[J");
+
     for line in output_buffer {
         let mut line_text = String::from("");
 
@@ -71,6 +76,8 @@ fn print_buffer<'s>(output_buffer: [[&'s str; W as usize]; H as usize]) {
 
         println!("{}", line_text);
     }
+
+    io::stdout().flush().unwrap();
 }
 
 fn main() {
